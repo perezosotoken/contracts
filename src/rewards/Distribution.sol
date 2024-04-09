@@ -1,60 +1,45 @@
-
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.9;
-
+pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract RewardDistributor is ReentrancyGuard, Ownable {
     IERC20 public token;
 
-    mapping(address => bool) public tierAAddresses;
-    mapping(address => bool) public tierBAddresses;
+    mapping(address => uint256) public tierAAddresses;
+    mapping(address => uint256) public tierBAddresses;
+
+    uint256 public currentTierAVersion = 1;
+    uint256 public currentTierBVersion = 1;
 
     uint256 public constant TIER_A_REWARD = 100_000_000e18;
     uint256 public constant TIER_B_REWARD = 10_000_000e18;
 
-    constructor(IERC20 _token) {
-        token = _token;
+    constructor(address _token) Ownable(msg.sender) {
+        token = IERC20(_token);
     }
 
     function addTierAAddress(address _address) external onlyOwner {
-        tierAAddresses[_address] = true;
-    }
-
-    function removeTierAAddress(address _address) external onlyOwner {
-        tierAAddresses[_address] = false;
-    }
-
-    function clearTierAAddresses() external onlyOwner {
-        // Not efficient for large datasets, consider a different approach for production
-        // This is just a simplified example
-        for (uint256 i = 0; i < addresses.length; i++) {
-            tierAAddresses[addresses[i]] = false;
-        }
+        tierAAddresses[_address] = currentTierAVersion;
     }
 
     function addTierBAddress(address _address) external onlyOwner {
-        tierBAddresses[_address] = true;
+        tierBAddresses[_address] = currentTierBVersion;
     }
 
-    function removeTierBAddress(address _address) external onlyOwner {
-        tierBAddresses[_address] = false;
+    function clearTierAAddresses() external onlyOwner {
+        currentTierAVersion++;
     }
 
     function clearTierBAddresses() external onlyOwner {
-        // Not efficient for large datasets, consider a different approach for production
-        // This is just a simplified example
-        for (uint256 i = 0; i < addresses.length; i++) {
-            tierBAddresses[addresses[i]] = false;
-        }
+        currentTierBVersion++;
     }
 
     function distributeTierARewards(address[] calldata _addresses) external onlyOwner nonReentrant {
         for (uint256 i = 0; i < _addresses.length; i++) {
-            if (tierAAddresses[_addresses[i]]) {
+            if (tierAAddresses[_addresses[i]] == currentTierAVersion) {
                 token.transfer(_addresses[i], TIER_A_REWARD);
             }
         }
@@ -62,7 +47,7 @@ contract RewardDistributor is ReentrancyGuard, Ownable {
 
     function distributeTierBRewards(address[] calldata _addresses) external onlyOwner nonReentrant {
         for (uint256 i = 0; i < _addresses.length; i++) {
-            if (tierBAddresses[_addresses[i]]) {
+            if (tierBAddresses[_addresses[i]] == currentTierBVersion) {
                 token.transfer(_addresses[i], TIER_B_REWARD);
             }
         }
@@ -78,6 +63,5 @@ contract RewardDistributor is ReentrancyGuard, Ownable {
         payable(owner()).transfer(address(this).balance);
     }
 
-    // To allow the contract to receive ETH (not required for ERC20 recovery)
     receive() external payable {}
 }
