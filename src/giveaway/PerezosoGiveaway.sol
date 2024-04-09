@@ -11,6 +11,7 @@ contract PerezosoGiveaway is ReentrancyGuard {
     }
 
     IERC20 private _token;
+    
     uint256 public maxTicket;
     uint256 public ENTRY_FEE;
     uint256 public PRIZE;
@@ -22,6 +23,7 @@ contract PerezosoGiveaway is ReentrancyGuard {
     uint256 public hour;
     uint256 public minute;
     uint256 public totalRewardDistributed;
+
     Leaderboard[] public leaderboard;
 
     struct Leaderboard {
