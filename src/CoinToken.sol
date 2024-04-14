@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "./interfaces/IERC20.sol";
-import "./interfaces/IERC20Metadata.sol";
-import "./abstract/Context.sol";
-import "./abstract/Ownable.sol";
-import "./abstract/Pausable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import "@openzeppelin/contracts/utils/Context.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+
 import "v2-periphery/interfaces/IUniswapV2Router02.sol";
 import "v2-periphery/interfaces/IUniswapV2Factory.sol";
 import "v2-periphery/interfaces/IUniswapV2Pair.sol";
-import "./ERC20.sol";
 
 contract CoinToken is ERC20, Ownable, Pausable {
 
@@ -52,9 +53,9 @@ contract CoinToken is ERC20, Ownable, Pausable {
     IUniswapV2Pair private uniswapV2Pair;
     
     constructor(string memory _tokenName,string memory _tokenSymbol,uint256 _supply,address[6] memory _addr,uint256[8] memory _value) ERC20(_tokenName, _tokenSymbol) payable
+    Ownable(_addr[5])
     {
         initialSupply =_supply * (10**18);
-        _setOwner(_addr[5]);
         uniswapV2Router02 = IUniswapV2Router02(_addr[1]);
         uniswapV2Factory = IUniswapV2Factory(uniswapV2Router02.factory());
         uniswapV2Pair = IUniswapV2Pair(uniswapV2Factory.createPair(address(this), uniswapV2Router02.WETH()));
