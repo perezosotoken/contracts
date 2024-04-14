@@ -13,19 +13,19 @@ contract Distribution is ReentrancyGuard, Ownable {
 
     /// @notice Defines tiers for distribution
     enum Tier {
-        A,
-        B
+        tier1,
+        tier2
     }
 
-    /// @notice Array of addresses in tier A
-    address[] public tierA;
-    /// @notice Array of addresses in tier B
-    address[] public tierB;
+    /// @notice Array of addresses in tier 1
+    address[] public tier1; 
+    /// @notice Array of addresses in tier 2 
+    address[] public tier2;
 
-    /// @notice Reward amount for tier A
-    uint256 public TIER_A_REWARD = 100_000_000e18;
-    /// @notice Reward amount for tier B
-    uint256 public TIER_B_REWARD = 10_000_000e18;
+    /// @notice Reward amount for tier 1 (1B tokens)
+    uint256 public TIER_1_REWARD = 1_000_000_000e18;
+    /// @notice Reward amount for tier 2 (300M tokens)
+    uint256 public TIER_2_REWARD = 300_000_000e18;
 
     /// @notice Stores rewards for each tier
     mapping (Tier => uint256) public tierRewards;
@@ -38,8 +38,8 @@ contract Distribution is ReentrancyGuard, Ownable {
     /// @param _token Address of the ERC20 token contract
     constructor(uint256[] memory _rewardAmounts, address _token) Ownable(msg.sender) {
         require(_rewardAmounts.length == 2, "Invalid reward amounts");
-        tierRewards[Tier.A] = _rewardAmounts[0];
-        tierRewards[Tier.B] = _rewardAmounts[1];
+        tierRewards[Tier.tier1] = _rewardAmounts[0];
+        tierRewards[Tier.tier2] = _rewardAmounts[1];
         token = IERC20(_token);
     }
 
@@ -47,10 +47,10 @@ contract Distribution is ReentrancyGuard, Ownable {
     /// @param _tier The tier to which the address should be added
     /// @param _address The address to add to the tier
     function addAddressToTier(Tier _tier, address _address) external onlyOwner {
-        if (_tier == Tier.A) {
-            tierA.push(_address);
-        } else if (_tier == Tier.B) {
-            tierB.push(_address);
+        if (_tier == Tier.tier1) {
+            tier1.push(_address);
+        } else if (_tier == Tier.tier2) {
+            tier2.push(_address);
         } 
     }
 
@@ -58,19 +58,19 @@ contract Distribution is ReentrancyGuard, Ownable {
     /// @param _tier The tier from which the address should be removed
     /// @param _address The address to remove from the tier
     function removeAddressFromTier(Tier _tier, address _address) external onlyOwner {
-        if (_tier == Tier.A) {
-            for (uint256 i = 0; i < tierA.length; i++) {
-                if (tierA[i] == _address) {
-                    tierA[i] = tierA[tierA.length - 1];
-                    tierA.pop();
+        if (_tier == Tier.tier1) {
+            for (uint256 i = 0; i < tier1.length; i++) {
+                if (tier1[i] == _address) {
+                    tier1[i] = tier1[tier1.length - 1];
+                    tier1.pop();
                     break;
                 }
             }
-        } else if (_tier == Tier.B) {
-            for (uint256 i = 0; i < tierB.length; i++) {
-                if (tierB[i] == _address) {
-                    tierB[i] = tierB[tierB.length - 1];
-                    tierB.pop();
+        } else if (_tier == Tier.tier2) {
+            for (uint256 i = 0; i < tier2.length; i++) {
+                if (tier2[i] == _address) {
+                    tier2[i] = tierB[tier2.length - 1];
+                    tier2.pop();
                     break;
                 }
             }
@@ -81,8 +81,8 @@ contract Distribution is ReentrancyGuard, Ownable {
 
     /// @notice Removes all addresses from all tiers
     function removeAllAddresses() external onlyOwner {
-        delete tierA;
-        delete tierB;
+        delete tier1;
+        delete tier2;
     }
 
     /// @notice Sets the reward amount for a tier
@@ -90,12 +90,12 @@ contract Distribution is ReentrancyGuard, Ownable {
     /// @param _amount The reward amount to set
     function setTierRewards(Tier _tier, uint256 _amount) external onlyOwner {
         require(_amount > 0, "Amount must be greater than 0");
-        if (_tier == Tier.A) {
-            TIER_A_REWARD = _amount;
-            tierRewards[Tier.A] = _amount;       
-        } else if (_tier == Tier.B){
-            TIER_B_REWARD = _amount;
-            tierRewards[Tier.B] = _amount;
+        if (_tier == Tier.tier1) {
+            TIER_1_REWARD = _amount;
+            tierRewards[Tier.tier1] = _amount;       
+        } else if (_tier == Tier.tier2){
+            TIER_2_REWARD = _amount;
+            tierRewards[Tier.tier2] = _amount;
         } else {
             revert("Invalid tier");
         }
@@ -138,10 +138,10 @@ contract Distribution is ReentrancyGuard, Ownable {
     /// @param _tier The tier for which to get the reward amount
     /// @return The reward amount for the specified tier
     function getTierRewards(Tier _tier) external view returns (uint256) {
-        if (_tier == Tier.A) {
-            return TIER_A_REWARD;
+        if (_tier == Tier.tier1) {
+            return TIER_1_REWARD;
         } else {
-            return TIER_B_REWARD;
+            return TIER_2_REWARD;
         }
     }
 
@@ -149,10 +149,10 @@ contract Distribution is ReentrancyGuard, Ownable {
     /// @param _tier The tier for which to get the addresses
     /// @return An array of addresses associated with the specified tier
     function getTierAddresses(Tier _tier) public view returns (address[] memory) {
-        if (_tier == Tier.A) {
-            return tierA;
-        } else if (_tier == Tier.B) {
-            return tierB;
+        if (_tier == Tier.tier1) {
+            return tier1;
+        } else if (_tier == Tier.tier2) {
+            return tier2;
         }
     }
 
