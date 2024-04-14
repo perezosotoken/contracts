@@ -52,6 +52,7 @@ contract PerezosoStaking is Ownable, ReentrancyGuard {
     constructor(address _stakingToken) Ownable(msg.sender) {
         require(_stakingToken != address(0), "Staking token cannot be the zero address.");
         stakingToken = _stakingToken;
+        rewardToken =  _stakingToken;
         initializeDurations();
         initializeTiers();
     }
