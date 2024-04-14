@@ -22,11 +22,6 @@ contract Distribution is ReentrancyGuard, Ownable {
     /// @notice Array of addresses in tier 2 
     address[] public tier2;
 
-    /// @notice Reward amount for tier 1 (1B tokens)
-    uint256 public TIER_1_REWARD = 1_000_000_000e18;
-    /// @notice Reward amount for tier 2 (300M tokens)
-    uint256 public TIER_2_REWARD = 300_000_000e18;
-
     /// @notice Stores rewards for each tier
     mapping (Tier => uint256) public tierRewards;
 
@@ -69,7 +64,7 @@ contract Distribution is ReentrancyGuard, Ownable {
         } else if (_tier == Tier.tier2) {
             for (uint256 i = 0; i < tier2.length; i++) {
                 if (tier2[i] == _address) {
-                    tier2[i] = tierB[tier2.length - 1];
+                    tier2[i] = tier2[tier2.length - 1];
                     tier2.pop();
                     break;
                 }
@@ -91,10 +86,8 @@ contract Distribution is ReentrancyGuard, Ownable {
     function setTierRewards(Tier _tier, uint256 _amount) external onlyOwner {
         require(_amount > 0, "Amount must be greater than 0");
         if (_tier == Tier.tier1) {
-            TIER_1_REWARD = _amount;
             tierRewards[Tier.tier1] = _amount;       
         } else if (_tier == Tier.tier2){
-            TIER_2_REWARD = _amount;
             tierRewards[Tier.tier2] = _amount;
         } else {
             revert("Invalid tier");
@@ -139,9 +132,9 @@ contract Distribution is ReentrancyGuard, Ownable {
     /// @return The reward amount for the specified tier
     function getTierRewards(Tier _tier) external view returns (uint256) {
         if (_tier == Tier.tier1) {
-            return TIER_1_REWARD;
+            return tierRewards[Tier.tier1];
         } else {
-            return TIER_2_REWARD;
+            return tierRewards[Tier.tier2];
         }
     }
 
