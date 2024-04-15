@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "../libraries/Utils.sol";
 
 contract PerezosoStaking is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -28,7 +29,7 @@ contract PerezosoStaking is Ownable, ReentrancyGuard {
         StakingDuration.TwelveMonths
     ];
 
-    enum Tier { tier1, tier2, tier3, tier4 }
+    enum Tier { None, Tier1, Tier2, Tier3, Tier4 }
     enum StakingDuration { OneMonth, ThreeMonths, SixMonths, TwelveMonths }
 
     struct StakingTier {
@@ -65,10 +66,24 @@ contract PerezosoStaking is Ownable, ReentrancyGuard {
     }
 
     function initializeTiers() internal {
-        setupTierRewards(Tier.tier1, 1e12, [uint256(300e6), uint256(1.5e9), uint256(4e9), uint256(10e9)]);
-        setupTierRewards(Tier.tier2, 1e11, [uint256(30e6), uint256(150e6), uint256(400e6), uint256(1e9)]);
-        setupTierRewards(Tier.tier3, 1e10, [uint256(3e6), uint256(15e6), uint256(40e6), uint256(100e6)]);
-        setupTierRewards(Tier.tier4, 1e9,  [uint256(300e3), uint256(1.5e6), uint256(4e6), uint256(10e6)]);
+        tierMap[Tier.Tier1].minAmountStaked = 1e18;  // Example: 1 ETH
+        tierMap[Tier.Tier2].minAmountStaked = 50e18; // Example: 50 ETH
+        tierMap[Tier.Tier3].minAmountStaked = 100e18; // Example: 100 ETH
+        tierMap[Tier.Tier4].minAmountStaked = 500e18; // Example: 500 ETH
+    }
+
+    function determineTier(uint256 _amount) public view returns (Tier) {
+        if(_amount >= tierMap[Tier.Tier4].minAmountStaked) {
+            return Tier.Tier4;
+        } else if(_amount >= tierMap[Tier.Tier3].minAmountStaked) {
+            return Tier.Tier3;
+        } else if(_amount >= tierMap[Tier.Tier2].minAmountStaked) {
+            return Tier.Tier2;
+        } else if(_amount >= tierMap[Tier.Tier1].minAmountStaked) {
+            return Tier.Tier1;
+        } else {
+            return Tier.None; // Indicates no valid tier found
+        }
     }
 
     function setupTierRewards(Tier tier, uint256 minStake, uint256[4] memory rewards) internal {
@@ -79,24 +94,29 @@ contract PerezosoStaking is Ownable, ReentrancyGuard {
         tierMap[tier].rewards[StakingDuration.TwelveMonths] = rewards[3];
     }
 
-    function stake(uint256 _amount, StakingDuration _duration) external nonReentrant returns (uint256) {
+    function stake(uint256 _amount, StakingDuration _duration) external nonReentrant {
         Tier tier = determineTier(_amount);
-        require(tier != Tier(0), "Staked amount does not meet any tier minimum.");
+        require(tier != Tier.None, "Staked amount does not meet any tier minimum.");
         require(userMap[msg.sender].hasStaked == false, "Already staked.");
 
         User storage user = userMap[msg.sender];
+        
+        // Calculate rewards for previous stakes before updating
+        if (user.hasStaked) {
+            user.accumulatedRewards += _calculateTierRewards(msg.sender);
+        }
+
         user.stakeTime = uint48(block.timestamp);
         user.unlockTime = uint48(block.timestamp + durations[_duration]);
-        user.stakeAmount = SafeCast.toUint160(_amount);
+        user.stakeAmount = SafeCast.toUint160(user.stakeAmount + _amount);
         user.stakingTier = tier;
         user.duration = _duration;
         user.hasStaked = true;
-        user.accumulatedRewards = tierMap[tier].rewards[_duration];  // Set initial rewards based on tier and duration
+
         tokenTotalStaked += _amount;
 
         IERC20(stakingToken).safeTransferFrom(msg.sender, address(this), _amount);
         emit Stake(msg.sender, _amount, block.timestamp, tier, _duration);
-        return user.accumulatedRewards;
     }
 
     function unStake() external nonReentrant {
@@ -118,16 +138,6 @@ contract PerezosoStaking is Ownable, ReentrancyGuard {
         IERC20(stakingToken).safeTransfer(msg.sender, amount);
         emit Withdraw(msg.sender, amount, block.timestamp);
         
-        // Optionally return rewards along with unstaking
-        // return (amount, rewards);
-    }
-
-    function determineTier(uint256 _amount) public view returns (Tier) {
-        if (_amount >= tierMap[Tier.tier1].minAmountStaked) return Tier.tier1;
-        if (_amount >= tierMap[Tier.tier2].minAmountStaked) return Tier.tier2;
-        if (_amount >= tierMap[Tier.tier3].minAmountStaked) return Tier.tier3;
-        if (_amount >= tierMap[Tier.tier4].minAmountStaked) return Tier.tier4;
-        return Tier(0); // No valid tier found
     }
 
     function _updateRewards(address _staker) internal returns (User storage user) {
@@ -137,61 +147,68 @@ contract PerezosoStaking is Ownable, ReentrancyGuard {
         return user;
     }
 
-    function _calculateTierRewards(address _staker) internal view returns (uint256) {
+    function _calculateTierRewards(address _staker) internal returns (uint256) {
         User storage user = userMap[_staker];
         StakingTier storage tier = tierMap[user.stakingTier];
-        uint48 durationStaked = uint48(block.timestamp - user.stakeTime);
+        uint256 currentTimestamp = block.timestamp;
 
-        // Iterate over all possible durations using the predefined array
-        for (uint i = 0; i < durationKeys.length; i++) {
-            StakingDuration dur = durationKeys[i];
-            if (durationStaked >= durations[dur]) {
-                return tier.rewards[dur];  // Return the reward corresponding to this duration
-            }
-        }
-        return 0;  // No reward if duration is below the minimum
+        // Calculate time staked in seconds
+        uint256 timeStaked = currentTimestamp - user.stakeTime;
+
+        // Calculate rewards based on time staked
+        // For example, reward rate could be rewards per day pro-rata
+        uint256 dailyRewardRate = tier.rewards[user.duration] / durations[user.duration]; // Assuming durations are in seconds and represent total staking duration
+
+        uint256 rewards = (timeStaked * dailyRewardRate) / 86400; // Convert to daily rate
+
+        // Update stored stake time to current time after calculating rewards
+        user.stakeTime = uint48(currentTimestamp);
+        return rewards;
     }
 
-    function withdraw(uint256 _amount) external nonReentrant returns (uint256) {
-        require(_amount > 0, "Amount to withdraw should be greater than zero");
+    function withdraw() external nonReentrant {
         require(block.timestamp > getUnlockTime(msg.sender), "Staked tokens are still locked");
 
-        User storage user = _updateRewards(msg.sender);
-        require(_amount <= user.stakeAmount, "Withdraw amount exceeds staked amount");
+        User storage user = userMap[msg.sender];
+        require(user.stakeAmount > 0, "Amount to withdraw should be greater than zero");
 
-        user.stakeAmount = SafeCast.toUint160(user.stakeAmount - _amount);
-        tokenTotalStaked -= _amount;
+        // Update rewards before performing withdrawal
+        user.accumulatedRewards += _calculateTierRewards(msg.sender);
+        IERC20(stakingToken).transfer(msg.sender, user.stakeAmount);
 
-        IERC20(stakingToken).safeTransfer(msg.sender, _amount);
-        emit Withdraw(msg.sender, _amount, block.timestamp);
-        return _amount;
+        user.stakeAmount = 0;
+        tokenTotalStaked = 0;
+
+        user.hasStaked = false;
+
+
+        emit Withdraw(msg.sender, user.stakeAmount, block.timestamp);
     }
 
-    function claim() external nonReentrant returns (uint256) {
+    function claim() external nonReentrant {
         User storage user = userMap[msg.sender];
-        uint256 rewardTokens = getEarnedRewardTokens(msg.sender);
+        uint256 rewardTokens = getAccumulatedRewards(msg.sender);
         require(rewardTokens > 0, "No reward tokens to claim");
         require(rewardTokens <= IERC20(rewardToken).balanceOf(address(this)), "Insufficient reward tokens available");
 
         user.accumulatedRewards = 0;  // Reset accumulated rewards
         IERC20(rewardToken).safeTransfer(msg.sender, rewardTokens);
         emit Claimed(msg.sender, rewardToken, rewardTokens);
-        return rewardTokens;
     }
 
     function getTierDetails(Tier _tier) public pure returns (uint256 minInterval, StakingDuration durationKey) {
-        if (_tier == Tier.tier1) {
+        if (_tier == Tier.Tier1) {
             return (14 days, StakingDuration.TwelveMonths);
-        } else if (_tier == Tier.tier2) {
+        } else if (_tier == Tier.Tier2) {
             return (10 days, StakingDuration.SixMonths);
-        } else if (_tier == Tier.tier3) {
+        } else if (_tier == Tier.Tier3) {
             return (7 days, StakingDuration.ThreeMonths);
         } else {
             return (3 days, StakingDuration.OneMonth);
         }
     }
 
-    function getEarnedRewardTokens(address _staker) public view returns (uint256) {
+    function getAccumulatedRewards(address _staker) public view returns (uint256) {
         return userMap[_staker].accumulatedRewards;
     }
 
@@ -199,20 +216,40 @@ contract PerezosoStaking is Ownable, ReentrancyGuard {
         return userMap[_staker].unlockTime;
     }
 
-    /**
-    * @dev Returns the amount of tokens staked by the specified user.
-    * @param user The address of the user whose staked balance is to be retrieved.
-    * @return The amount of tokens currently staked by the user.
-    */
     function getStakedBalance(address user) public view returns (uint256) {
         return userMap[user].stakeAmount;
     }
-
-    function recoverERC20Tokens(address _tokenAddress) external onlyOwner {
-        require(_tokenAddress != stakingToken, "Cannot remove staking token");
-        uint256 balance = IERC20(_tokenAddress).balanceOf(address(this));
-        IERC20(_tokenAddress).safeTransfer(owner(), balance);
-        emit ERC20TokensRecovered(_tokenAddress, msg.sender, balance);
+    
+    function isUserStaked(address _user) public view returns (bool) {
+        return userMap[_user].hasStaked;
+    }
+    
+    /// @notice Allows owner to recover any ETH sent to the contract
+    function recoverETH() public onlyOwner nonReentrant {
+        if (address(this).balance > 0) {
+            payable(owner()).transfer(address(this).balance);
+        }
+    }
+    
+    /// @notice Allows owner to recover any ERC20 tokens sent to the contract
+    function recoverTokens() public onlyOwner nonReentrant {
+        if (IERC20(stakingToken).balanceOf(address(this)) > 0) {
+            IERC20(stakingToken).transfer(owner(), IERC20(stakingToken).balanceOf(address(this)));
+        }
     }
 
+    /// @notice Allows owner to recover both ETH and ERC20 tokens sent to the contract
+    function recoverFunds() public onlyOwner nonReentrant {
+        recoverETH();
+        recoverTokens();
+    }
+
+    /// @notice Receive function to handle ETH sent directly to the contract
+    receive() external payable {}
+
+    /// @notice Allows the owner to terminate the contract and recover funds
+    function kill() external onlyOwner {
+        recoverFunds();
+        selfdestruct(payable(owner()));
+    }
 }
