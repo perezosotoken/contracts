@@ -70,6 +70,14 @@ contract PerezosoStaking is Ownable, ReentrancyGuard {
         tierMap[Tier.Tier2].minAmountStaked = 50e18; // Example: 50 ETH
         tierMap[Tier.Tier3].minAmountStaked = 100e18; // Example: 100 ETH
         tierMap[Tier.Tier4].minAmountStaked = 500e18; // Example: 500 ETH
+
+        for (uint256 i = 0; i < durationKeys.length; i++) {
+            StakingDuration duration = durationKeys[i];
+            setupTierRewards(Tier.Tier1, 1e18, [uint256(1000 ether), uint256(2000 ether), uint256(3000 ether), uint256(4000 ether)]);
+            setupTierRewards(Tier.Tier2, 50e18, [uint256(5000 ether), uint256(6000 ether), uint256(7000 ether), uint256(8000 ether)]);
+            setupTierRewards(Tier.Tier3, 100e18, [uint256(9000 ether), uint256(10000 ether), uint256(11000 ether), uint256(12000 ether)]);
+            setupTierRewards(Tier.Tier4, 500e18, [uint256(13000 ether), uint256(14000 ether), uint256(15000 ether), uint256(16000 ether)]);
+        }
     }
 
     function determineTier(uint256 _amount) public view returns (Tier) {
@@ -186,13 +194,16 @@ contract PerezosoStaking is Ownable, ReentrancyGuard {
     }
 
     function claim() external nonReentrant {
+        require(block.timestamp > getUnlockTime(msg.sender), "Time not yet elapsed.");
+
         User storage user = userMap[msg.sender];
-        uint256 rewardTokens = getAccumulatedRewards(msg.sender);
+        
+        uint256 rewardTokens = tierMap[user.stakingTier].rewards[user.duration];
         require(rewardTokens > 0, "No reward tokens to claim");
         require(rewardTokens <= IERC20(rewardToken).balanceOf(address(this)), "Insufficient reward tokens available");
+        IERC20(rewardToken).safeTransfer(msg.sender, rewardTokens);
 
         user.accumulatedRewards = 0;  // Reset accumulated rewards
-        IERC20(rewardToken).safeTransfer(msg.sender, rewardTokens);
         emit Claimed(msg.sender, rewardToken, rewardTokens);
     }
 
