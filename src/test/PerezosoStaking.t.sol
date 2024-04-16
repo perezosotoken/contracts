@@ -9,16 +9,20 @@ contract PerezosoStakingTest is Test {
     PerezosoStaking staking;
     MyToken token; 
     address staker = address(1);
-    uint256 stakeAmount = 1e18; // 1 ETH
     uint256 totalSupply = 420000000000000000000000000000000;
     uint256 MAX_UINT256 = 2**256 - 1;
 
-    PerezosoStaking.StakingDuration duration = PerezosoStaking.StakingDuration.OneMonth;
+    PerezosoStaking.StakingDuration duration1 = PerezosoStaking.StakingDuration.OneMonth;
+    PerezosoStaking.StakingDuration duration2 = PerezosoStaking.StakingDuration.ThreeMonths;
+    PerezosoStaking.StakingDuration duration3 = PerezosoStaking.StakingDuration.SixMonths;
+    PerezosoStaking.StakingDuration duration4 = PerezosoStaking.StakingDuration.TwelveMonths;
 
     function setUp() public {
         token = new MyToken(totalSupply);
         PerezosoStaking perezosoStaking = new PerezosoStaking(address(token));
         staking = new PerezosoStaking(address(token)); 
+
+        uint256 stakeAmount = 1e18;
 
         vm.label(staker, "Staker");
         vm.deal(staker, stakeAmount);
@@ -30,12 +34,12 @@ contract PerezosoStakingTest is Test {
         token.approve(address(staking), MAX_UINT256);
 
         vm.startPrank(staker);
-        token.approve(address(staking), stakeAmount);
         vm.stopPrank();
     }
 
     function testUnstake() public {
-        staking.stake(stakeAmount, duration);
+        uint256 stakeAmount = 1e18;        
+        staking.stake(stakeAmount, duration1);
         vm.warp(block.timestamp + 30 days); // Warp forward past the lock period
         staking.unStake();
         assertEq(staking.getStakedBalance(staker), 0, "Stake balance should be zero after unstaking");
@@ -44,7 +48,8 @@ contract PerezosoStakingTest is Test {
 
 
      function testClaimShouldFailNotElapsed() public {
-        staking.stake(stakeAmount, duration);
+        uint256 stakeAmount = 1e18;        
+        staking.stake(stakeAmount, duration1);
         vm.warp(block.timestamp + 1 days); // Warp forward to generate rewards
         // This should fail with a specific revert message indicating the lock period is not yet over
         vm.expectRevert("Time not yet elapsed.");
@@ -54,7 +59,8 @@ contract PerezosoStakingTest is Test {
     }  
 
      function testClaimShouldNotFail() public {
-        staking.stake(stakeAmount, duration);
+        uint256 stakeAmount = 1e18;        
+        staking.stake(stakeAmount, duration1);
         vm.warp(block.timestamp + 31 days); // Warp forward to generate rewards
         // This should fail with a specific revert message indicating the lock period is not yet over
         staking.claim();
@@ -63,10 +69,16 @@ contract PerezosoStakingTest is Test {
     }      
     
     function testStake() public {
+        uint256 stakeAmount = 1e18;
+        _testStake(stakeAmount, duration1);
+    }
+
+    function _testStake(uint256 stakeAmount, PerezosoStaking.StakingDuration duration) internal {
         vm.startPrank(staker);
+        token.approve(address(staking), stakeAmount);
 
         // vm.warp(block.timestamp + 1 days); // Warp forward by one day
-        staking.stake(stakeAmount, duration);
+        staking.stake(stakeAmount, duration1);
         assertEq(staking.getStakedBalance(staker), stakeAmount, "Stake amount should match");
         assertTrue(staking.isUserStaked(staker), "User should be marked as staked");
     }
@@ -93,6 +105,43 @@ contract PerezosoStakingTest is Test {
 
         vm.warp(block.timestamp + 31 days); // Warp forward past the lock period
         staking.withdraw();
+    }
+
+    function testStakeAndClaimTier1() public {
+        uint256 stakeAmount = 1e18;
+        _testStake(stakeAmount, duration2); // Ensure stake is successful and correct
+        vm.warp(block.timestamp + 31 days); // Warp forward past the lock period
+        staking.claim();
+        assertEq(token.balanceOf(staker), 1000000999000000000000000000, "Rewards should be greater than zero after claiming");
+    }
+
+    function testStakeAndClaimTier2() public {
+        uint256 stakeAmount = 50e18;
+
+        _testStake(stakeAmount, duration2); // Ensure stake is successful and correct
+        vm.warp(block.timestamp + 91 days); // Warp forward past the lock period
+        staking.claim();
+        assertGt(token.balanceOf(staker), stakeAmount, "Rewards should be greater than zero after claiming");
+    }
+
+    function testStakeAndClaimTier3() public {
+        token.approve(address(staking), MAX_UINT256);
+
+        uint256 stakeAmount = 100e18;
+        _testStake(stakeAmount, duration3); // Ensure stake is successful and correct
+        vm.warp(block.timestamp + 181 days); // Warp forward past the lock period
+        staking.claim();
+        assertGt(token.balanceOf(staker), 11_000e18, "Rewards should be greater than zero after claiming");
+    }
+
+    function testStakeAndClaimTier4() public {
+        token.approve(address(staking), MAX_UINT256);
+
+        uint256 stakeAmount = 500e18;
+        _testStake(stakeAmount, duration4); // Ensure stake is successful and correct
+        vm.warp(block.timestamp + 366 days); // Warp forward past the lock period
+        staking.claim();
+        assertGt(token.balanceOf(staker), 0, "Rewards should be greater than zero after claiming");
     }
 
 }
