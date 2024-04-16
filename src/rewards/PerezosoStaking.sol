@@ -21,8 +21,9 @@ contract PerezosoStaking is Ownable, ReentrancyGuard {
     address public immutable stakingToken;
     address public rewardToken;
 
-    StakingDuration[] public durationKeys = 
-    [
+    mapping(StakingDuration => uint256[]) public rewardsPerTier;
+
+    StakingDuration[] public durationKeys = [
         StakingDuration.OneMonth, 
         StakingDuration.ThreeMonths, 
         StakingDuration.SixMonths, 
@@ -71,13 +72,38 @@ contract PerezosoStaking is Ownable, ReentrancyGuard {
         tierMap[Tier.Tier3].minAmountStaked = 100e18; // Example: 100 ETH
         tierMap[Tier.Tier4].minAmountStaked = 500e18; // Example: 500 ETH
 
-        for (uint256 i = 0; i < durationKeys.length; i++) {
-            StakingDuration duration = durationKeys[i];
-            setupTierRewards(Tier.Tier1, 1e18, [uint256(1000 ether), uint256(2000 ether), uint256(3000 ether), uint256(4000 ether)]);
-            setupTierRewards(Tier.Tier2, 50e18, [uint256(5000 ether), uint256(6000 ether), uint256(7000 ether), uint256(8000 ether)]);
-            setupTierRewards(Tier.Tier3, 100e18, [uint256(9000 ether), uint256(10000 ether), uint256(11000 ether), uint256(12000 ether)]);
-            setupTierRewards(Tier.Tier4, 500e18, [uint256(13000 ether), uint256(14000 ether), uint256(15000 ether), uint256(16000 ether)]);
-        }
+        uint256[4] memory rewardsTier1 = [
+            uint256(1000 ether), 
+            uint256(2000 ether), 
+            uint256(3000 ether), 
+            uint256(4000 ether)
+        ];
+
+        uint256[4] memory rewardsTier2 = [
+            uint256(5000 ether), 
+            uint256(6000 ether), 
+            uint256(7000 ether), 
+            uint256(8000 ether)
+        ];
+
+        uint256[4] memory rewardsTier3 = [
+            uint256(9000 ether), 
+            uint256(10000 ether), 
+            uint256(11000 ether), 
+            uint256(12000 ether)
+        ];
+
+        uint256[4] memory rewardsTier4 = [
+            uint256(13000 ether), 
+            uint256(14000 ether), 
+            uint256(15000 ether), 
+            uint256(16000 ether)
+        ];
+
+        setupTierRewards(Tier.Tier1, 1e18, rewardsTier1);
+        setupTierRewards(Tier.Tier2, 50e18, rewardsTier2);
+        setupTierRewards(Tier.Tier3, 100e18, rewardsTier3);
+        setupTierRewards(Tier.Tier4, 500e18, rewardsTier4);
     }
 
     function determineTier(uint256 _amount) public view returns (Tier) {
@@ -90,7 +116,7 @@ contract PerezosoStaking is Ownable, ReentrancyGuard {
         } else if(_amount >= tierMap[Tier.Tier1].minAmountStaked) {
             return Tier.Tier1;
         } else {
-            return Tier.None; // Indicates no valid tier found
+            return Tier.None; 
         }
     }
 
@@ -109,7 +135,6 @@ contract PerezosoStaking is Ownable, ReentrancyGuard {
 
         User storage user = userMap[msg.sender];
         
-        // Calculate rewards for previous stakes before updating
         if (user.hasStaked) {
             user.accumulatedRewards += _calculateTierRewards(msg.sender);
         }
@@ -135,10 +160,6 @@ contract PerezosoStaking is Ownable, ReentrancyGuard {
         uint256 amount = user.stakeAmount;
         require(amount > 0, "No tokens to unstake");
 
-        // Optionally process rewards here
-        // uint256 rewards = processRewards(user);
-
-        // Update the state before transferring to prevent reentrancy issues
         user.stakeAmount = 0;
         user.hasStaked = false;
         
@@ -160,16 +181,10 @@ contract PerezosoStaking is Ownable, ReentrancyGuard {
         StakingTier storage tier = tierMap[user.stakingTier];
         uint256 currentTimestamp = block.timestamp;
 
-        // Calculate time staked in seconds
         uint256 timeStaked = currentTimestamp - user.stakeTime;
+        uint256 dailyRewardRate = tier.rewards[user.duration] / durations[user.duration]; 
+        uint256 rewards = (timeStaked * dailyRewardRate) / 86400; 
 
-        // Calculate rewards based on time staked
-        // For example, reward rate could be rewards per day pro-rata
-        uint256 dailyRewardRate = tier.rewards[user.duration] / durations[user.duration]; // Assuming durations are in seconds and represent total staking duration
-
-        uint256 rewards = (timeStaked * dailyRewardRate) / 86400; // Convert to daily rate
-
-        // Update stored stake time to current time after calculating rewards
         user.stakeTime = uint48(currentTimestamp);
         return rewards;
     }
@@ -180,15 +195,12 @@ contract PerezosoStaking is Ownable, ReentrancyGuard {
         User storage user = userMap[msg.sender];
         require(user.stakeAmount > 0, "Amount to withdraw should be greater than zero");
 
-        // Update rewards before performing withdrawal
         user.accumulatedRewards += _calculateTierRewards(msg.sender);
         IERC20(stakingToken).transfer(msg.sender, user.stakeAmount);
 
         user.stakeAmount = 0;
         tokenTotalStaked = 0;
-
         user.hasStaked = false;
-
 
         emit Withdraw(msg.sender, user.stakeAmount, block.timestamp);
     }
@@ -203,7 +215,7 @@ contract PerezosoStaking is Ownable, ReentrancyGuard {
         require(rewardTokens <= IERC20(rewardToken).balanceOf(address(this)), "Insufficient reward tokens available");
         IERC20(rewardToken).safeTransfer(msg.sender, rewardTokens);
 
-        user.accumulatedRewards = 0;  // Reset accumulated rewards
+        user.accumulatedRewards = 0; 
         emit Claimed(msg.sender, rewardToken, rewardTokens);
     }
 
@@ -235,30 +247,25 @@ contract PerezosoStaking is Ownable, ReentrancyGuard {
         return userMap[_user].hasStaked;
     }
     
-    /// @notice Allows owner to recover any ETH sent to the contract
     function recoverETH() public onlyOwner nonReentrant {
         if (address(this).balance > 0) {
             payable(owner()).transfer(address(this).balance);
         }
     }
     
-    /// @notice Allows owner to recover any ERC20 tokens sent to the contract
     function recoverTokens() public onlyOwner nonReentrant {
         if (IERC20(stakingToken).balanceOf(address(this)) > 0) {
             IERC20(stakingToken).transfer(owner(), IERC20(stakingToken).balanceOf(address(this)));
         }
     }
 
-    /// @notice Allows owner to recover both ETH and ERC20 tokens sent to the contract
     function recoverFunds() public onlyOwner nonReentrant {
         recoverETH();
         recoverTokens();
     }
 
-    /// @notice Receive function to handle ETH sent directly to the contract
     receive() external payable {}
 
-    /// @notice Allows the owner to terminate the contract and recover funds
     function kill() external onlyOwner {
         recoverFunds();
         selfdestruct(payable(owner()));
