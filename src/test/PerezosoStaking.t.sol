@@ -14,23 +14,16 @@ contract PerezosoStakingTest is Test {
     uint256 MAX_UINT256 = 2**256 - 1;
 
     PerezosoStaking.StakingDuration duration1 = PerezosoStaking.StakingDuration.OneMonth;
-    PerezosoStaking.StakingDuration duration2 = PerezosoStaking.StakingDuration.ThreeMonths;
-    PerezosoStaking.StakingDuration duration3 = PerezosoStaking.StakingDuration.SixMonths;
-    PerezosoStaking.StakingDuration duration4 = PerezosoStaking.StakingDuration.TwelveMonths;
 
     function setUp() public {
         token = new MockToken(totalSupply);
         PerezosoStaking perezosoStaking = new PerezosoStaking(address(token));
         staking = new PerezosoStaking(address(token)); 
 
-        uint256 stakeAmount = 1e18;
-
         vm.label(staker, "Staker");
-        vm.deal(staker, stakeAmount);
-
         token.mint(address(this), totalSupply);
         token.transfer(address(staking), 1_000_000_000e18);
-        token.transfer(address(staker), 1_000_000_000e18);
+        token.transfer(address(staker), 100_000_000_000_000e18);
 
         token.approve(address(staking), MAX_UINT256);
 
@@ -39,185 +32,86 @@ contract PerezosoStakingTest is Test {
     }
 
     function testUnstake() public {
-        uint256 stakeAmount = 1e18;        
-        staking.stake(stakeAmount, duration1);
-        vm.warp(block.timestamp + 30 days); 
+        staking.stake(PerezosoStaking.Tier(0), duration1);
+        vm.warp(block.timestamp + 31 days); 
         staking.unStake();
         assertEq(staking.getStakedBalance(staker), 0, "Stake balance should be zero after unstaking");
         assertFalse(staking.isUserStaked(staker), "User should not be marked as staked after unstaking");
     }
 
-
-     function testClaimShouldFailNotElapsed() public {
-        uint256 stakeAmount = 1e18;        
-        staking.stake(stakeAmount, duration1);
-        vm.warp(block.timestamp + 1 days); // Warp forward to generate rewards
-        // This should fail with a specific revert message indicating the lock period is not yet over
-        vm.expectRevert("Time not yet elapsed.");
-        staking.claim();
-
-        assertGt(token.balanceOf(staker), 0, "Rewards should be greater than zero after claiming");
-    }  
-
-     function testClaimShouldNotFail() public {
-        uint256 stakeAmount = 1e18;        
-        staking.stake(stakeAmount, duration1);
-        vm.warp(block.timestamp + 31 days); // Warp forward to generate rewards
-        // This should fail with a specific revert message indicating the lock period is not yet over
-        staking.claim();
-
-        assertGt(token.balanceOf(staker), 0, "Rewards should be greater than zero after claiming");
-    }      
     
     function testStake() public {
-        uint256 stakeAmount = 1e18;
-        _testStake(stakeAmount, duration1);
+        _testStake(0, duration1);
     }
 
-    function _testStake(uint256 stakeAmount, PerezosoStaking.StakingDuration duration) internal {
+    function _testStake(uint8 tierIndex, PerezosoStaking.StakingDuration duration) internal {
         vm.startPrank(staker);
-        token.approve(address(staking), stakeAmount);
+        token.approve(address(staking), MAX_UINT256);
 
-        // vm.warp(block.timestamp + 1 days); // Warp forward by one day
-        staking.stake(stakeAmount, duration1);
-        assertEq(staking.getStakedBalance(staker), stakeAmount, "Stake amount should match");
+        staking.stake(PerezosoStaking.Tier(tierIndex), duration1);
         assertTrue(staking.isUserStaked(staker), "User should be marked as staked");
     }
 
-    function testWithdraw() public {
-        testStake(); 
 
-        vm.warp(block.timestamp + 31 days); 
-        staking.withdraw();
-        assertEq(staking.getStakedBalance(staker), 0, "Stake balance should be zero after withdrawal");
+    function testUnstakeShouldFailStillLocked() public {
+        _testStake(0, duration1); 
+
+        vm.warp(block.timestamp + 1 days);
+        vm.expectRevert("Stake is still locked.");
+        staking.unStake();
     }
 
-    function testWithdrawShouldFailStillLocked() public {
-        testStake(); 
-
-        vm.warp(block.timestamp + 1 days); // Warp forward to generate rewards
-        // This should fail with a specific revert message indicating the lock period is not yet over
-        vm.expectRevert("Staked tokens are still locked");
-        staking.withdraw();
-    }
-
-    function testWithdrawShouldNotFail() public {
-        testStake(); 
+    function testUnstakeShouldNotFail() public {
+        _testStake(0, duration1); 
 
         vm.warp(block.timestamp + 31 days); 
-        staking.withdraw();
+        staking.unStake();
     }
 
     function testStakeAndClaimTier1() public {
-        uint256 stakeAmount = 1e18;
+        _testStake(0, duration1); 
+        assertEq(staking.getStakedBalance(staker), 1000000000000000000000000000, "Stake amount should match");
 
-        _testStake(stakeAmount, duration1); 
         vm.warp(block.timestamp + 31 days); 
-        staking.claim();
-        assertEq(token.balanceOf(staker), 1000000999000000000000000000, "Rewards should match after claiming");
+        uint256 currentBalance = token.balanceOf(staker);
         staking.unStake();
-
-        _testStake(stakeAmount, duration2); 
-        vm.warp(block.timestamp + 31 days); 
-        staking.claim();
-        assertEq(token.balanceOf(staker), 1000001999000000000000000000, "Rewards should match after claiming");
-        staking.unStake();
-        
-        _testStake(stakeAmount, duration3); 
-        vm.warp(block.timestamp + 31 days); 
-        staking.claim();
-        assertEq(token.balanceOf(staker), 1000002999000000000000000000, "Rewards should match after claiming");
-        staking.unStake();
-
-        _testStake(stakeAmount, duration4); 
-        vm.warp(block.timestamp + 31 days); 
-        staking.claim();
-        assertEq(token.balanceOf(staker), 1000003999000000000000000000, "Rewards should match after claiming");
-        staking.unStake();        
+        uint256 newBalance = token.balanceOf(staker);
+        assertEq(newBalance - currentBalance, 1000300000000000000000000000, "Rewards should match after claiming");
     }
 
     function testStakeAndClaimTier2() public {
-        uint256 stakeAmount = 50e18;
+        _testStake(1, duration1); 
+        assertEq(staking.getStakedBalance(staker), 10000000000000000000000000000, "Stake amount should match");
 
-        _testStake(stakeAmount, duration1); 
         vm.warp(block.timestamp + 31 days); 
-        staking.claim();
-        assertEq(token.balanceOf(staker), 1000004950000000000000000000, "Rewards should match after claiming");
+        uint256 currentBalance = token.balanceOf(staker);
         staking.unStake();
+        uint256 newBalance = token.balanceOf(staker);
+        assertEq(newBalance - currentBalance, 10003000000000000000000000000, "Rewards should match after claiming");
 
-        _testStake(stakeAmount, duration2); 
-        vm.warp(block.timestamp + 31 days); 
-        staking.claim();
-        assertEq(token.balanceOf(staker), 1000009950000000000000000000, "Rewards should match after claiming");
-        staking.unStake();
-        
-        _testStake(stakeAmount, duration3); 
-        vm.warp(block.timestamp + 31 days); 
-        staking.claim();
-        assertEq(token.balanceOf(staker), 1000014950000000000000000000, "Rewards should match after claiming");
-        staking.unStake();
-
-        _testStake(stakeAmount, duration4); 
-        vm.warp(block.timestamp + 31 days); 
-        staking.claim();
-        assertEq(token.balanceOf(staker), 1000019950000000000000000000, "Rewards should match after claiming");
-        staking.unStake();  
     }
 
     function testStakeAndClaimTier3() public {
-        uint256 stakeAmount = 100e18;
+        _testStake(2, duration1); 
+        assertEq(staking.getStakedBalance(staker), 100000000000000000000000000000, "Stake amount should match");
 
-        _testStake(stakeAmount, duration1); 
         vm.warp(block.timestamp + 31 days); 
-        staking.claim();
-        assertEq(token.balanceOf(staker), 1000008900000000000000000000, "Rewards should match after claiming");
+        uint256 currentBalance = token.balanceOf(staker);
         staking.unStake();
+        uint256 newBalance = token.balanceOf(staker);
+        assertEq(newBalance - currentBalance, 100030000000000000000000000000, "Rewards should match after claiming");
 
-        _testStake(stakeAmount, duration2); 
-        vm.warp(block.timestamp + 31 days); 
-        staking.claim();
-        assertEq(token.balanceOf(staker), 1000017900000000000000000000, "Rewards should match after claiming");
-        staking.unStake();
-        
-        _testStake(stakeAmount, duration3); 
-        vm.warp(block.timestamp + 31 days); 
-        staking.claim();
-        assertEq(token.balanceOf(staker), 1000026900000000000000000000, "Rewards should match after claiming");
-        staking.unStake();
-
-        _testStake(stakeAmount, duration4); 
-        vm.warp(block.timestamp + 31 days); 
-        staking.claim();
-        assertEq(token.balanceOf(staker), 1000035900000000000000000000, "Rewards should match after claiming");
-        staking.unStake();  
     }
 
     function testStakeAndClaimTier4() public {
-        uint256 stakeAmount = 500e18;
+        _testStake(3, duration1); 
+        assertEq(staking.getStakedBalance(staker), 1000000000000000000000000000000, "Stake amount should match");
 
-        _testStake(stakeAmount, duration1); 
         vm.warp(block.timestamp + 31 days); 
-        staking.claim();
-        assertEq(token.balanceOf(staker), 1000012500000000000000000000, "Rewards should match after claiming");
+        uint256 currentBalance = token.balanceOf(staker);
         staking.unStake();
+        uint256 newBalance = token.balanceOf(staker);
+        assertEq(newBalance - currentBalance, 1000300000000000000000000000000, "Rewards should match after claiming");
 
-        _testStake(stakeAmount, duration2); 
-        vm.warp(block.timestamp + 31 days); 
-        staking.claim();
-        assertEq(token.balanceOf(staker), 1000025500000000000000000000, "Rewards should match after claiming");
-        staking.unStake();
-        
-        _testStake(stakeAmount, duration3); 
-        vm.warp(block.timestamp + 31 days); 
-        staking.claim();
-        assertEq(token.balanceOf(staker), 1000038500000000000000000000, "Rewards should match after claiming");
-        staking.unStake();
-
-        _testStake(stakeAmount, duration4); 
-        vm.warp(block.timestamp + 31 days); 
-        staking.claim();
-        assertEq(token.balanceOf(staker), 1000051500000000000000000000, "Rewards should match after claiming");
-        staking.unStake();  
     }
-
 }
