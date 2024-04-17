@@ -17,12 +17,12 @@ contract PerezosoStakingTest is Test {
 
     function setUp() public {
         token = new MockToken(totalSupply);
-        PerezosoStaking perezosoStaking = new PerezosoStaking(address(token));
         staking = new PerezosoStaking(address(token)); 
 
         vm.label(staker, "Staker");
+
         token.mint(address(this), totalSupply);
-        token.transfer(address(staking), 1_000_000_000e18);
+        token.transfer(address(staking), 100_000_000_000_000e18);
         token.transfer(address(staker), 100_000_000_000_000e18);
 
         token.approve(address(staking), MAX_UINT256);
@@ -39,7 +39,6 @@ contract PerezosoStakingTest is Test {
         assertFalse(staking.isUserStaked(staker), "User should not be marked as staked after unstaking");
     }
 
-    
     function testStake() public {
         _testStake(0, duration1);
     }
@@ -51,7 +50,6 @@ contract PerezosoStakingTest is Test {
         staking.stake(PerezosoStaking.Tier(tierIndex), duration1);
         assertTrue(staking.isUserStaked(staker), "User should be marked as staked");
     }
-
 
     function testUnstakeShouldFailStillLocked() public {
         _testStake(0, duration1); 
@@ -88,7 +86,6 @@ contract PerezosoStakingTest is Test {
         staking.unStake();
         uint256 newBalance = token.balanceOf(staker);
         assertEq(newBalance - currentBalance, 10003000000000000000000000000, "Rewards should match after claiming");
-
     }
 
     function testStakeAndClaimTier3() public {
@@ -100,7 +97,6 @@ contract PerezosoStakingTest is Test {
         staking.unStake();
         uint256 newBalance = token.balanceOf(staker);
         assertEq(newBalance - currentBalance, 100030000000000000000000000000, "Rewards should match after claiming");
-
     }
 
     function testStakeAndClaimTier4() public {
@@ -112,6 +108,5 @@ contract PerezosoStakingTest is Test {
         staking.unStake();
         uint256 newBalance = token.balanceOf(staker);
         assertEq(newBalance - currentBalance, 1000300000000000000000000000000, "Rewards should match after claiming");
-
     }
 }
