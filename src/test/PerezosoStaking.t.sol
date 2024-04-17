@@ -43,6 +43,22 @@ contract PerezosoStakingTest is Test {
         _testStake(0, duration1);
     }
 
+    function testStakeAndGetTotalStakers() public {
+        _testStake(0, duration1);
+        uint256 totalStakers = staking.getTotalStakers();
+        assertEq(totalStakers, 1, "Total stakers should be 1");
+        vm.warp(block.timestamp + 31 days); 
+        staking.unStake();  
+    }
+
+    function testStakeAndGetTotalStakers2() public {
+        _testStake(0, duration1);
+        uint256 totalStakers = staking.getTotalStakers();
+        assertLt(totalStakers, 2, "Total stakers should be less than 2");
+        vm.warp(block.timestamp + 31 days); 
+        staking.unStake();
+    }
+
     function _testStake(uint8 tierIndex, PerezosoStaking.StakingDuration duration) internal {
         vm.startPrank(staker);
         token.approve(address(staking), MAX_UINT256);

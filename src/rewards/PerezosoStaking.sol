@@ -44,6 +44,7 @@ contract PerezosoStaking is Ownable, ReentrancyGuard {
     uint48 public constant MAX_TIME = type(uint48).max;
     uint256 public tokenTotalStaked;
     uint256 public maxTotalStakes;
+    uint256 public totalStakers;
     address public immutable stakingToken;
     address public rewardToken;
     bool public isStopped; 
@@ -59,6 +60,7 @@ contract PerezosoStaking is Ownable, ReentrancyGuard {
         require(_stakingToken != address(0), "Staking token cannot be the zero address.");
         stakingToken = _stakingToken;
         rewardToken =  _stakingToken;
+        totalStakers = 0;
         initializeDurations();
         initializeTiers();
     }
@@ -119,6 +121,7 @@ contract PerezosoStaking is Ownable, ReentrancyGuard {
 
         tokenTotalStaked += _amount;
         maxTotalStakes += 1;
+        totalStakers += 1;
 
         IERC20(stakingToken).safeTransferFrom(msg.sender, address(this), _amount);
         emit Stake(msg.sender, _amount, block.timestamp, tier, _duration);
@@ -137,6 +140,7 @@ contract PerezosoStaking is Ownable, ReentrancyGuard {
         user.hasStaked = false;
         
         tokenTotalStaked -= amount;
+        totalStakers -= 1;
 
         uint256 totalRewards = tierMap[user.stakingTier].rewards[user.duration];
         uint256 totalAmount = amount + totalRewards;
@@ -170,6 +174,11 @@ contract PerezosoStaking is Ownable, ReentrancyGuard {
         }
     }
     
+    /// @notice Allows the owner to recover ERC20 tokens sent to the contract
+    function getTotalStakers() public view returns (uint256) {
+        return totalStakers;
+    }
+
     /// @notice Allows the owner to recover ERC20 tokens sent to the contract
     function recoverTokens() public onlyOwner nonReentrant {
         if (IERC20(stakingToken).balanceOf(address(this)) > 0) {
